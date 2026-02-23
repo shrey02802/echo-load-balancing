@@ -7,8 +7,7 @@ metadata:
 spec:
   selector:
     app: echo-app
-  type: NodePort
+  type: ClusterIP
   ports:
     - port: 80
       targetPort: 5678
-      nodePort: 30080
