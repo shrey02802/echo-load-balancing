@@ -61,6 +61,27 @@ This section documents all the changes and implementations made during the proje
    - Updated cleanup procedures
    - Added this development history section
 
+### Phase 3: StatefulSet Implementation (Redis)
+7. ✅ **Added Redis StatefulSet** (`redis-statefulset.yaml`) - NEW
+   - Implemented StatefulSet for Redis with 3 replicas
+   - Configured persistent storage using VolumeClaimTemplates
+   - Each pod gets its own persistent volume (1Gi storage)
+   - Container port: 6379 (Redis default port)
+   - Uses `redis:latest` image
+   - Storage mounted at `/data` in container
+
+8. ✅ **Added Redis Headless Service** (`redis-service.yaml`) - NEW
+   - Created headless service (clusterIP: None) for StatefulSet
+   - Required for StatefulSet pod identity and stable network
+   - Enables direct pod-to-pod communication
+   - Port: 6379
+
+9. ✅ **Added Redis PVC** (`redis-pvc.yaml`) - NEW
+   - PersistentVolumeClaim for Redis storage
+   - Access mode: ReadWriteOnce
+   - Storage request: 1Gi
+   - Note: StatefulSet uses volumeClaimTemplates, but this provides additional storage option
+
 ### Summary of All Files Created/Modified
 
 | File | Status | What Was Done |
@@ -68,7 +89,10 @@ This section documents all the changes and implementations made during the proje
 | `echo-config.yaml` | ✅ Created | ConfigMap for application configuration |
 | `echo-deployment.yaml` | ✅ Created | Deployment with 3 replicas, health checks, resource limits |
 | `echo-service.yaml` | ✅ Created → Modified | Initially NodePort, changed to ClusterIP for security |
-| `echo-ingress.yaml` | ✅ Created (NEW) | NGINX Ingress for external routing |
+| `echo-ingress.yaml` | ✅ Created | NGINX Ingress for external routing |
+| `redis-statefulset.yaml` | ✅ Created (NEW) | StatefulSet for Redis with persistent storage |
+| `redis-service.yaml` | ✅ Created (NEW) | Headless service for Redis StatefulSet |
+| `redis-pvc.yaml` | ✅ Created (NEW) | PersistentVolumeClaim for Redis storage |
 | `README.md` | ✅ Created → Updated | Comprehensive documentation with all changes |
 
 ### Key Improvements Made
@@ -98,27 +122,40 @@ This section documents all the changes and implementations made during the proje
 - ✅ Resource management (CPU/Memory limits)
 - ✅ Health probes (Liveness and Readiness)
 - ✅ Environment variable injection from ConfigMap
+- ✅ **StatefulSet** for stateful applications (Redis)
+- ✅ **Headless Service** for StatefulSet pod identity
+- ✅ **Persistent Storage** with VolumeClaimTemplates and PVC
+- ✅ **Stateful vs Stateless** applications in Kubernetes
 
 ---
 
 ## 🏗️ Architecture
 
-The project consists of four main Kubernetes resources:
+The project consists of two main application stacks:
 
+### Echo Server Stack (Stateless Application)
 1. **ConfigMap** (`echo-config.yaml`) - Stores configuration data (the echo message)
 2. **Deployment** (`echo-deployment.yaml`) - Manages 3 replicas of the echo server pods
 3. **Service** (`echo-service.yaml`) - Exposes the pods via ClusterIP and handles load balancing
 4. **Ingress** (`echo-ingress.yaml`) - Provides HTTP/HTTPS routing and external access via NGINX Ingress Controller
 
+### Redis Stack (Stateful Application)
+5. **StatefulSet** (`redis-statefulset.yaml`) - Manages 3 Redis replicas with persistent storage
+6. **Headless Service** (`redis-service.yaml`) - Provides stable network identity for StatefulSet pods
+7. **PersistentVolumeClaim** (`redis-pvc.yaml`) - Defines storage requirements for Redis
+
 ## 📁 Project Structure
 
 ```
 .
-├── echo-config.yaml      # ConfigMap for application configuration
-├── echo-deployment.yaml  # Deployment with 3 replicas
-├── echo-service.yaml     # Service for load balancing (ClusterIP)
-├── echo-ingress.yaml     # Ingress for external routing
-└── README.md            # This file
+├── echo-config.yaml        # ConfigMap for application configuration
+├── echo-deployment.yaml    # Deployment with 3 replicas
+├── echo-service.yaml       # Service for load balancing (ClusterIP)
+├── echo-ingress.yaml       # Ingress for external routing
+├── redis-statefulset.yaml  # StatefulSet for Redis with persistent storage
+├── redis-service.yaml      # Headless service for Redis StatefulSet
+├── redis-pvc.yaml          # PersistentVolumeClaim for Redis
+└── README.md              # This file
 ```
 
 ## 🔧 Components
@@ -154,6 +191,29 @@ The project consists of four main Kubernetes resources:
 - **Purpose**: Provides external HTTP/HTTPS access and path-based routing
 - **Prerequisites**: Requires NGINX Ingress Controller installed in the cluster
 
+### 5. StatefulSet (`redis-statefulset.yaml`)
+- **Replicas**: 3 Redis pods
+- **Image**: `redis:latest`
+- **Port**: Container listens on port 6379
+- **Storage**: Each pod gets its own persistent volume (1Gi) via VolumeClaimTemplates
+- **Mount Path**: `/data` (Redis data directory)
+- **Access Mode**: ReadWriteOnce
+- **Service Name**: `redis-service` (required for StatefulSet)
+- **Purpose**: Demonstrates stateful application deployment with persistent storage
+
+### 6. Headless Service (`redis-service.yaml`)
+- **Type**: Headless (clusterIP: None)
+- **Port**: 6379
+- **Purpose**: Provides stable network identity for StatefulSet pods
+- **Pod Identity**: Each pod gets a stable DNS name (redis-0.redis-service, redis-1.redis-service, etc.)
+- **Required**: StatefulSets require a headless service for proper pod identification
+
+### 7. PersistentVolumeClaim (`redis-pvc.yaml`)
+- **Access Mode**: ReadWriteOnce
+- **Storage**: 1Gi
+- **Purpose**: Defines storage requirements for Redis
+- **Note**: StatefulSet uses VolumeClaimTemplates, but this PVC provides an additional storage option
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -184,7 +244,18 @@ The project consists of four main Kubernetes resources:
    kubectl apply -f echo-ingress.yaml
    ```
 
-5. **Verify deployment**:
+5. **Deploy Redis StatefulSet** (optional):
+   ```bash
+   kubectl apply -f redis-service.yaml
+   kubectl apply -f redis-statefulset.yaml
+   ```
+
+6. **Deploy Redis PVC** (optional, if not using VolumeClaimTemplates):
+   ```bash
+   kubectl apply -f redis-pvc.yaml
+   ```
+
+7. **Verify deployment**:
    ```bash
    # Check pods
    kubectl get pods -l app=echo-app
@@ -194,19 +265,30 @@ The project consists of four main Kubernetes resources:
    
    # Check deployment
    kubectl get deployment echo-deployment
+   
+   # Check Redis StatefulSet
+   kubectl get statefulset redis
+   
+   # Check Redis pods
+   kubectl get pods -l app=redis
+   
+   # Check persistent volumes
+   kubectl get pvc
    ```
 
 ### Alternative: Deploy All at Once
 
 You can deploy all resources in one command:
 ```bash
-kubectl apply -f echo-config.yaml -f echo-deployment.yaml -f echo-service.yaml -f echo-ingress.yaml
+kubectl apply -f echo-config.yaml -f echo-deployment.yaml -f echo-service.yaml -f echo-ingress.yaml -f redis-service.yaml -f redis-statefulset.yaml -f redis-pvc.yaml
 ```
 
 Or if you're in the project directory:
 ```bash
 kubectl apply -f .
 ```
+
+**Note**: StatefulSets create pods sequentially, so Redis pods will start one at a time (redis-0, then redis-1, then redis-2).
 
 ### Prerequisites for Ingress
 
@@ -293,6 +375,41 @@ kubectl get pods -l app=echo-app -o wide
 kubectl logs <pod-name>
 ```
 
+### 6. Test Redis StatefulSet
+
+**Check Redis pods:**
+```bash
+kubectl get pods -l app=redis
+```
+
+**Access Redis pods (they have stable names):**
+```bash
+# Connect to redis-0
+kubectl exec -it redis-0 -- redis-cli
+
+# Or connect to redis-1
+kubectl exec -it redis-1 -- redis-cli
+
+# Or connect to redis-2
+kubectl exec -it redis-2 -- redis-cli
+```
+
+**Test Redis connectivity:**
+```bash
+# From within redis-cli
+SET test "Hello Redis"
+GET test
+```
+
+**Check persistent storage:**
+```bash
+# List PVCs
+kubectl get pvc
+
+# Describe a specific PVC
+kubectl describe pvc redis-storage-redis-0
+```
+
 ## 📊 Monitoring
 
 ### Check Pod Status
@@ -319,6 +436,9 @@ kubectl logs <pod-name>
 kubectl describe deployment echo-deployment
 kubectl describe service echo-service
 kubectl describe configmap echo-config
+kubectl describe statefulset redis
+kubectl describe service redis-service
+kubectl describe pvc
 ```
 
 ## 🔄 Scaling
@@ -338,19 +458,46 @@ kubectl scale deployment echo-deployment --replicas=2
 kubectl autoscale deployment echo-deployment --min=2 --max=10 --cpu-percent=80
 ```
 
+### Scale Redis StatefulSet
+
+**Scale Up:**
+```bash
+kubectl scale statefulset redis --replicas=5
+```
+
+**Scale Down:**
+```bash
+kubectl scale statefulset redis --replicas=2
+```
+
+**Note**: StatefulSets scale pods sequentially and maintain stable identities. When scaling down, pods are terminated in reverse order (highest ordinal first).
+
 ## 🧹 Cleanup
 
 To remove all resources:
 ```bash
+# Delete Echo stack
 kubectl delete -f echo-ingress.yaml
 kubectl delete -f echo-service.yaml
 kubectl delete -f echo-deployment.yaml
 kubectl delete -f echo-config.yaml
+
+# Delete Redis stack
+kubectl delete -f redis-statefulset.yaml
+kubectl delete -f redis-service.yaml
+kubectl delete -f redis-pvc.yaml
 ```
 
 Or delete all at once:
 ```bash
 kubectl delete -f .
+```
+
+**Important**: When deleting StatefulSets, PVCs are NOT automatically deleted. To delete PVCs:
+```bash
+kubectl delete pvc -l app=redis
+# Or delete specific PVCs
+kubectl delete pvc redis-storage-redis-0 redis-storage-redis-1 redis-storage-redis-2
 ```
 
 ## 📝 Customization
@@ -410,6 +557,9 @@ Then update your hosts file accordingly.
 ✅ **Configuration Management**: ConfigMap separates configuration from application code  
 ✅ **Ingress Routing**: NGINX Ingress provides external HTTP/HTTPS access with path-based routing  
 ✅ **Security**: ClusterIP service type restricts direct external access (access via Ingress only)  
+✅ **StatefulSet**: Redis StatefulSet demonstrates stateful application deployment  
+✅ **Persistent Storage**: VolumeClaimTemplates provide persistent volumes for each Redis pod  
+✅ **Headless Service**: Stable network identity for StatefulSet pods with predictable DNS names  
 
 ## 🔍 Troubleshooting
 
@@ -549,7 +699,10 @@ git branch -a
 |------|-------------|-------------|
 | `echo-ingress.yaml` | **New** | Added Ingress resource for external routing |
 | `echo-service.yaml` | **Modified** | Changed service type from NodePort to ClusterIP |
-| `README.md` | **Modified** | Updated documentation with Ingress instructions |
+| `redis-statefulset.yaml` | **New** | Added Redis StatefulSet with persistent storage |
+| `redis-service.yaml` | **New** | Added headless service for Redis StatefulSet |
+| `redis-pvc.yaml` | **New** | Added PersistentVolumeClaim for Redis |
+| `README.md` | **Modified** | Updated documentation with all new components |
 
 ### Benefits of Using a Separate Branch
 
